@@ -1,6 +1,0 @@
-{
-  "name": "API Studio",
-  "description": "A local-first, highly-polished API client with HTTP, WebSockets, GraphQL, gRPC, mock servers, pre-request scripts, encrypted vault, and AI integrations.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
