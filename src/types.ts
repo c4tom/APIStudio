@@ -136,6 +136,8 @@ export interface MockLog {
   matched: boolean;
   ip: string;
   mcpCall?: boolean;
+  validationPassed?: boolean;
+  validationError?: string;
 }
 
 export interface MockServer {

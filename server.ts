@@ -8,9 +8,13 @@ import https from "https";
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import { Method, BodyType, Protocol } from "./src/types.js";
+import AjvModule from "ajv";
 
 const app = express();
 const PORT = 3000;
+
+const Ajv = (AjvModule as any).default || AjvModule;
+const ajv = new Ajv({ allErrors: true, strict: false });
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -439,6 +443,32 @@ app.all("/mock/:serverId/*", async (req, res) => {
       res.setHeader("Content-Type", "application/json");
     }
 
+    // Perform payload schema validation if MCP tools/JSON schema is configured
+    let validationPassed: boolean | undefined = undefined;
+    let validationError: string | undefined = undefined;
+
+    if (matchedRoute.mcpEnabled && matchedRoute.mcpSchema) {
+      try {
+        const schema = typeof matchedRoute.mcpSchema === "string" 
+          ? JSON.parse(matchedRoute.mcpSchema) 
+          : matchedRoute.mcpSchema;
+        const validate = ajv.compile(schema);
+        const payload = req.body || {};
+        const valid = validate(payload);
+        if (valid) {
+          validationPassed = true;
+        } else {
+          validationPassed = false;
+          validationError = validate.errors
+            ? validate.errors.map(err => `${err.instancePath || "root"} ${err.message}`).join("; ")
+            : "Unknown validation error";
+        }
+      } catch (err: any) {
+        validationPassed = false;
+        validationError = `JSON Schema error: ${err.message}`;
+      }
+    }
+
     await logMockRequest(serverId, {
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
@@ -446,7 +476,10 @@ app.all("/mock/:serverId/*", async (req, res) => {
       path: originalPath,
       status: matchedRoute.status,
       matched: true,
-      ip: req.ip || "127.0.0.1"
+      ip: req.ip || "127.0.0.1",
+      mcpCall: matchedRoute.mcpEnabled || false,
+      validationPassed,
+      validationError
     });
 
     return res.status(matchedRoute.status).send(matchedRoute.responseBody);

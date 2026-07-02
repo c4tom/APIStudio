@@ -13,6 +13,9 @@ export interface MockTemplate {
     status: number;
     headers: Array<{ key: string; value: string; enabled: boolean }>;
     responseBody: string;
+    mcpEnabled?: boolean;
+    mcpDescription?: string;
+    mcpSchema?: string;
   }>;
 }
 
@@ -124,6 +127,28 @@ export const mockTemplates: MockTemplate[] = [
         path: "/v1/checkout/sessions",
         status: 200,
         headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
+        mcpEnabled: true,
+        mcpDescription: "Creates a new Stripe Checkout Session. Validates required links and checkout line items structure.",
+        mcpSchema: JSON.stringify({
+          type: "object",
+          required: ["success_url", "cancel_url", "line_items"],
+          properties: {
+            success_url: { type: "string" },
+            cancel_url: { type: "string" },
+            line_items: {
+              type: "array",
+              minItems: 1,
+              items: {
+                type: "object",
+                required: ["price", "quantity"],
+                properties: {
+                  price: { type: "string" },
+                  quantity: { type: "integer", minimum: 1 }
+                }
+              }
+            }
+          }
+        }, null, 2),
         responseBody: JSON.stringify({
           id: "cs_test_b1aA24f8dC10bE99a",
           object: "checkout.session",
@@ -232,6 +257,131 @@ export const mockTemplates: MockTemplate[] = [
           activeRequestsCount: 18,
           p95ResponseTimeMs: 14.8,
           p99ResponseTimeMs: 44.1
+        }, null, 2)
+      }
+    ]
+  },
+  {
+    id: "template-oauth2-server",
+    name: "OAuth 2.0 Authorization Server",
+    category: "Security & Identity",
+    description: "Standards-compliant OAuth 2.0 mock endpoints for code/token exchange, client credentials grant, and user information lookups.",
+    iconName: "Key",
+    badgeColor: "bg-rose-950/50 text-rose-400 border-rose-800",
+    routes: [
+      {
+        method: "POST",
+        path: "/oauth/token",
+        status: 200,
+        headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
+        mcpEnabled: true,
+        mcpDescription: "Exchanges grant codes or credentials for access tokens. Requires client_id and grant_type.",
+        mcpSchema: JSON.stringify({
+          type: "object",
+          required: ["grant_type", "client_id"],
+          properties: {
+            grant_type: { type: "string", enum: ["client_credentials", "authorization_code", "password", "refresh_token"] },
+            client_id: { type: "string", minLength: 3 },
+            client_secret: { type: "string" },
+            code: { type: "string" }
+          }
+        }, null, 2),
+        responseBody: JSON.stringify({
+          access_token: "mock_access_token_sec_9918bcda8f1a",
+          token_type: "Bearer",
+          expires_in: 3600,
+          refresh_token: "mock_refresh_token_ref_a7719cc1bc9d",
+          scope: "read write profile email"
+        }, null, 2)
+      },
+      {
+        method: "GET",
+        path: "/oauth/userinfo",
+        status: 200,
+        headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
+        responseBody: JSON.stringify({
+          sub: "user_oauth_0c9a1",
+          name: "Alice DevSecOps",
+          preferred_username: "alice_dev",
+          email: "alice.devsecops@studio.io",
+          email_verified: true,
+          picture: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop"
+        }, null, 2)
+      },
+      {
+        method: "POST",
+        path: "/oauth/revoke",
+        status: 200,
+        headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
+        responseBody: JSON.stringify({
+          success: true,
+          message: "The OAuth 2.0 token has been successfully revoked in the sandbox authority."
+        }, null, 2)
+      }
+    ]
+  },
+  {
+    id: "template-geo-service",
+    name: "Geocoding & Maps Service (Geo Service)",
+    category: "Geospatial Services",
+    description: "High-precision mock service for geolocation lookup, spatial distance computation, and local timezones.",
+    iconName: "MapPin",
+    badgeColor: "bg-teal-950/50 text-teal-400 border-teal-800",
+    routes: [
+      {
+        method: "POST",
+        path: "/api/v1/geocode",
+        status: 200,
+        headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
+        mcpEnabled: true,
+        mcpDescription: "Geocodes an address string to precise coordinates. Requires address property.",
+        mcpSchema: JSON.stringify({
+          type: "object",
+          required: ["address"],
+          properties: {
+            address: { type: "string", minLength: 5 },
+            region: { type: "string" },
+            language: { type: "string" }
+          }
+        }, null, 2),
+        responseBody: JSON.stringify({
+          status: "OK",
+          results: [
+            {
+              formatted_address: "Av. Paulista, 1000 - Bela Vista, São Paulo - SP, 01310-100, Brazil",
+              geometry: {
+                location: { lat: -23.5615, lng: -46.656 },
+                location_type: "ROOFTOP"
+              },
+              place_id: "ChIJu0a12b_studio_geo"
+            }
+          ]
+        }, null, 2)
+      },
+      {
+        method: "GET",
+        path: "/api/v1/distance",
+        status: 200,
+        headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
+        responseBody: JSON.stringify({
+          origin: "São Paulo, Brazil",
+          destination: "Rio de Janeiro, Brazil",
+          distance: { text: "435 km", value: 435000 },
+          duration: { text: "5 hours 12 mins", value: 18720 },
+          status: "OK"
+        }, null, 2)
+      },
+      {
+        method: "GET",
+        path: "/api/v1/timezone",
+        status: 200,
+        headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
+        responseBody: JSON.stringify({
+          dstOffset: 0,
+          rawOffset: -10800,
+          status: "OK",
+          timeZoneId: "America/Sao_Paulo",
+          timeZoneName: "Brasilia Standard Time"
         }, null, 2)
       }
     ]

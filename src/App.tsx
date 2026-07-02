@@ -16,6 +16,7 @@ import {
 } from "./types";
 import { parseCurl, generateCodeSnippet, importPostmanCollection } from "./utils/helpers";
 import { mockTemplates, MockTemplate } from "./utils/mockTemplates";
+import { MockLibrary } from "./components/MockLibrary";
 import {
   Activity,
   Send,
@@ -138,7 +139,11 @@ export default function App() {
   const [routeStatus, setRouteStatus] = useState<number>(200);
   const [routeResponseBody, setRouteResponseBody] = useState<string>("");
   const [routeHeaders, setRouteHeaders] = useState<Array<{ key: string; value: string; enabled: boolean }>>([]);
+  const [routeMcpEnabled, setRouteMcpEnabled] = useState<boolean>(false);
+  const [routeMcpDescription, setRouteMcpDescription] = useState<string>("");
+  const [routeMcpSchema, setRouteMcpSchema] = useState<string>("");
   const [jsonValidationError, setJsonValidationError] = useState<string | null>(null);
+  const [schemaValidationError, setSchemaValidationError] = useState<string | null>(null);
 
   // WebSocket / Connection simulation state
   const [webSocketStatus, setWebSocketStatus] = useState<"disconnected" | "connecting" | "connected">("disconnected");
@@ -187,7 +192,11 @@ export default function App() {
       setRouteStatus(rt.status);
       setRouteResponseBody(rt.responseBody);
       setRouteHeaders(rt.headers || []);
+      setRouteMcpEnabled(rt.mcpEnabled || false);
+      setRouteMcpDescription(rt.mcpDescription || "");
+      setRouteMcpSchema(rt.mcpSchema || "");
       setJsonValidationError(null);
+      setSchemaValidationError(null);
     } else {
       // Pick first route if none selected and server exists
       if (srv.routes.length > 0) {
@@ -211,6 +220,20 @@ export default function App() {
       setJsonValidationError(e.message);
     }
   }, [routeResponseBody]);
+
+  // Live validation of JSON Schema
+  useEffect(() => {
+    if (!routeMcpSchema) {
+      setSchemaValidationError(null);
+      return;
+    }
+    try {
+      JSON.parse(routeMcpSchema);
+      setSchemaValidationError(null);
+    } catch (e: any) {
+      setSchemaValidationError(e.message);
+    }
+  }, [routeMcpSchema]);
 
   const fetchCollections = async () => {
     try {
@@ -1038,7 +1061,10 @@ export default function App() {
         path: r.path,
         status: r.status,
         headers: r.headers || [],
-        responseBody: r.responseBody
+        responseBody: r.responseBody,
+        mcpEnabled: r.mcpEnabled || false,
+        mcpDescription: r.mcpDescription || "",
+        mcpSchema: r.mcpSchema || ""
       }))
     };
     const updated = [...mockServers, newServer];
@@ -1083,7 +1109,10 @@ export default function App() {
       path: "/new-route",
       status: 200,
       headers: [{ key: "Content-Type", value: "application/json", enabled: true }],
-      responseBody: JSON.stringify({ message: "Mock Route Created Successfully" }, null, 2)
+      responseBody: JSON.stringify({ message: "Mock Route Created Successfully" }, null, 2),
+      mcpEnabled: false,
+      mcpDescription: "",
+      mcpSchema: ""
     };
     const updated = mockServers.map((srv) => {
       if (srv.id !== selectedMockServerId) return srv;
@@ -1108,7 +1137,10 @@ export default function App() {
             path: routePath,
             status: routeStatus,
             headers: routeHeaders,
-            responseBody: routeResponseBody
+            responseBody: routeResponseBody,
+            mcpEnabled: routeMcpEnabled,
+            mcpDescription: routeMcpDescription,
+            mcpSchema: routeMcpSchema
           };
         })
       };
@@ -1236,77 +1268,10 @@ export default function App() {
 
         {/* Dashboard Content area */}
         {showMockLibrary ? (
-          /* --- LIBRARY EXPLORER VIEW --- */
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            <div className="space-y-1">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-blue-400 font-display">Biblioteca de Mocks</h2>
-              <p className="text-xs text-gray-500">
-                Instancie imediatamente servidores virtuais prontos para simular provedores conhecidos ou APIs de terceiros.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {mockTemplates.map((tmpl) => (
-                <div
-                  key={tmpl.id}
-                  className="bg-[#252526] border border-[#333] hover:border-blue-500/50 rounded-lg p-5 transition-all flex flex-col justify-between space-y-4 shadow-sm group"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center space-x-3">
-                        <div className="p-2 rounded bg-blue-950/40 text-blue-400 border border-blue-900/50">
-                          {tmpl.iconName === "Database" && <Database className="w-5 h-5" />}
-                          {tmpl.iconName === "Shield" && <Shield className="w-5 h-5" />}
-                          {tmpl.iconName === "Lock" && <Lock className="w-5 h-5" />}
-                          {tmpl.iconName === "Globe" && <Globe className="w-5 h-5" />}
-                          {tmpl.iconName === "Activity" && <Activity className="w-5 h-5" />}
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-bold text-white group-hover:text-blue-400 transition-colors font-display">{tmpl.name}</h3>
-                          <span className={`inline-block text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border mt-1 ${tmpl.badgeColor}`}>
-                            {tmpl.category}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <p className="text-xs text-gray-400 leading-relaxed">
-                      {tmpl.description}
-                    </p>
-
-                    {/* Preview of routes */}
-                    <div className="space-y-1.5 pt-2">
-                      <span className="text-[10px] uppercase font-bold tracking-wider text-gray-500 block">Mapeamento de Rotas ({tmpl.routes.length})</span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {tmpl.routes.map((rt, idx) => (
-                          <div key={idx} className="flex items-center space-x-1 bg-[#1E1E1F] border border-[#333] rounded px-1.5 py-0.5 font-mono text-[9px]">
-                            <span className={`font-bold uppercase ${
-                              rt.method === "GET" ? "text-green-400" : "text-blue-400"
-                            }`}>
-                              {rt.method}
-                            </span>
-                            <span className="text-gray-400">{rt.path}</span>
-                            <span className="text-gray-600">→</span>
-                            <span className="text-[#9CDCFE]">{rt.status}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-3 border-t border-[#333]/40 flex justify-end">
-                    <button
-                      onClick={() => handleImportMockTemplate(tmpl)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs py-1.5 px-4 rounded transition-colors flex items-center space-x-2 animate-none"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                      <span>Instanciar Mock</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <MockLibrary
+            onInstantiate={handleImportMockTemplate}
+            onClose={() => setShowMockLibrary(false)}
+          />
         ) : (
           /* --- INSTANCE EDITOR VIEW --- */
           <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -1618,6 +1583,76 @@ export default function App() {
                               </button>
                             </div>
                           </div>
+
+                          {/* MCP Tool & Payload Validation section */}
+                          <div className="bg-[#252526]/40 border border-[#2D2D2D] rounded-lg p-3 space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-2">
+                                <Shield className="w-4 h-4 text-purple-400" />
+                                <div>
+                                  <span className="text-xs font-bold text-gray-200 block">MCP Tool & Payload Validation</span>
+                                  <span className="text-[10px] text-gray-500 block">Check incoming payloads against a JSON Schema</span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setRouteMcpEnabled(!routeMcpEnabled)}
+                                className={`px-2.5 py-1 rounded text-[10px] font-semibold transition-colors uppercase cursor-pointer ${
+                                  routeMcpEnabled
+                                    ? "bg-purple-950/50 border border-purple-800 text-purple-300"
+                                    : "bg-gray-800 border border-gray-700 text-gray-400"
+                                }`}
+                              >
+                                {routeMcpEnabled ? "Ativado" : "Desativado"}
+                              </button>
+                            </div>
+
+                            {routeMcpEnabled && (
+                              <div className="space-y-3">
+                                <div>
+                                  <label className="text-[10px] uppercase font-bold text-gray-500 block mb-1">MCP Tool Description / Purpose</label>
+                                  <input
+                                    type="text"
+                                    value={routeMcpDescription}
+                                    onChange={(e) => setRouteMcpDescription(e.target.value)}
+                                    placeholder="e.g. Validates client credit charge requests in the payment sandbox"
+                                    className="w-full bg-[#1E1E1F] border border-[#333] rounded px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#007ACC]"
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <label className="text-[10px] uppercase font-bold text-gray-500 block">JSON Schema Specification</label>
+                                    {schemaValidationError ? (
+                                      <span className="text-[9px] font-semibold text-red-400 bg-red-950/20 border border-red-900/40 px-1.5 py-0.5 rounded flex items-center">
+                                        <AlertTriangle className="w-3 h-3 mr-1" /> Schema Inválido
+                                      </span>
+                                    ) : routeMcpSchema ? (
+                                      <span className="text-[9px] font-semibold text-purple-400 bg-purple-950/20 border border-purple-900/40 px-1.5 py-0.5 rounded flex items-center">
+                                        <Check className="w-3 h-3 mr-1" /> Schema JSON Válido
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  <textarea
+                                    value={routeMcpSchema}
+                                    onChange={(e) => setRouteMcpSchema(e.target.value)}
+                                    placeholder={JSON.stringify({
+                                      type: "object",
+                                      required: ["name"],
+                                      properties: {
+                                        name: { type: "string" }
+                                      }
+                                    }, null, 2)}
+                                    rows={5}
+                                    className="w-full bg-[#1E1E1F] border border-[#333] rounded p-2.5 text-xs text-gray-300 font-mono outline-none resize-y focus:border-[#007ACC] h-32 focus:ring-1 focus:ring-blue-500/20"
+                                  />
+                                  {schemaValidationError && (
+                                    <span className="text-[9px] text-red-400 font-mono block mt-0.5">{schemaValidationError}</span>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ) : (
@@ -1654,15 +1689,46 @@ export default function App() {
                       </div>
                     ) : (
                       [...mockLogs].reverse().map((log, idx) => (
-                        <div key={idx} className="flex items-start space-x-2 py-0.5 border-b border-[#252526]/50">
-                          <span className="text-gray-600">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                          <span className={`font-bold uppercase ${
-                            log.method === "GET" ? "text-green-400" : "text-blue-400"
-                          }`}>{log.method}</span>
-                          <span className="text-[#9CDCFE]">{log.path}</span>
-                          <span className="text-gray-500">→</span>
-                          <span className={`font-bold ${log.status < 300 ? "text-green-400" : "text-red-400"}`}>{log.status}</span>
-                          <span className="text-gray-600 text-[10px] ml-auto">{log.ip || "127.0.0.1"}</span>
+                        <div key={idx} className="flex flex-col py-1.5 border-b border-[#252526]/40 space-y-1">
+                          <div className="flex items-start space-x-2">
+                            <span className="text-gray-600">[{new Date(log.timestamp).toLocaleTimeString()}]</span>
+                            <span className={`font-bold uppercase ${
+                              log.method === "GET" ? "text-green-400" : "text-blue-400"
+                            }`}>{log.method}</span>
+                            <span className="text-[#9CDCFE]">{log.path}</span>
+                            <span className="text-gray-500">→</span>
+                            <span className={`font-bold ${log.status < 300 ? "text-green-400" : "text-red-400"}`}>{log.status}</span>
+                            
+                            {/* MCP Tool Label */}
+                            {log.mcpCall && (
+                              <span className="bg-purple-950/40 border border-purple-800 text-purple-400 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">
+                                MCP Tool
+                              </span>
+                            )}
+
+                            {/* Schema Validation Badges */}
+                            {log.validationPassed === true && (
+                              <span className="bg-emerald-950/40 border border-emerald-800 text-emerald-400 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">
+                                Schema Pass
+                              </span>
+                            )}
+                            {log.validationPassed === false && (
+                              <span className="bg-red-950/40 border border-red-800 text-red-400 text-[8px] font-mono font-bold px-1.5 py-0.5 rounded uppercase tracking-wide">
+                                Schema Failed
+                              </span>
+                            )}
+
+                            <span className="text-gray-600 text-[10px] ml-auto">{log.ip || "127.0.0.1"}</span>
+                          </div>
+
+                          {/* Render validation errors if failed */}
+                          {log.validationPassed === false && log.validationError && (
+                            <div className="bg-red-950/20 border border-red-900/30 text-red-400 text-[10px] p-2 rounded-md font-mono mt-1 pl-6 relative">
+                              <span className="absolute left-1.5 top-1.5 text-red-500 font-bold">⚠️</span>
+                              <span className="font-bold block uppercase text-[8px] tracking-wider text-red-500 mb-0.5">Payload Validation Error:</span>
+                              {log.validationError}
+                            </div>
+                          )}
                         </div>
                       ))
                     )}
